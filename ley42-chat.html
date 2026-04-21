@@ -197,8 +197,7 @@ nav { display: flex; align-items: center; justify-content: space-between; paddin
 </div>
 
 <script>
-const HOST = 'https://memory-db-l6e3erq.svc.aped-4627-b74a.pinecone.io';
-const cfg = { key: 'TU_API_KEY_AQUI', ns: 'ley42' };
+const WORKER_URL = 'https://ley42-proxy.rogerdavidp55.workers.dev';
 let connected = true;
 
 function onKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }
@@ -243,18 +242,10 @@ async function doSearch(query) {
   document.getElementById('send-btn').disabled = true;
 
   try {
-    const res = await fetch(`${HOST}/records/search`, {
+    const res = await fetch(WORKER_URL, {
       method: 'POST',
-      headers: {
-        'Api-Key': cfg.key,
-        'Content-Type': 'application/json',
-        'X-Pinecone-API-Version': '2025-04'
-      },
-      body: JSON.stringify({
-        query: { inputs: { text: query }, top_k: 4 },
-        fields: ['text', 'fuente'],
-        namespace: cfg.ns
-      })
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query })
     });
 
     const data = await res.json();
@@ -272,12 +263,21 @@ async function doSearch(query) {
       const items = hits.map((h, i) => {
         const s = Math.min(h._score || 0, 1);
         const pct = Math.round(s * 100);
+        let txt = h.fields?.text || '';
+        // Si empieza cortado (minúscula), recortar hasta la primera mayúscula
+        const primeraMayuscula = txt.search(/[A-ZÁÉÍÓÚÑ]/);
+        if (primeraMayuscula > 0 && primeraMayuscula < 60) txt = txt.slice(primeraMayuscula);
+        // Si termina cortado (sin punto final), truncar en el último punto
+        if (!/[.!?]$/.test(txt.trim())) {
+          const ultimoPunto = txt.lastIndexOf('.');
+          if (ultimoPunto > txt.length * 0.5) txt = txt.slice(0, ultimoPunto + 1);
+        }
         return `<div class="res-item${i===0?' top':''}">
           <div class="res-relevance">
             <div class="res-dot"></div>
             ${i===0 ? 'Más relevante' : 'Relevante'} · ${pct}% coincidencia
           </div>
-          <div class="res-text">${h.fields?.text || h._id}</div>
+          <div class="res-text">${txt}</div>
         </div>`;
       }).join('');
 
